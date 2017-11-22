@@ -41,7 +41,6 @@ byte MMA8452Q::begin(MMA8452Q_Scale fsr, MMA8452Q_ODR odr)
 {
 	scale = fsr; // Haul fsr into our class variable, scale
 
-	//Wire.setSpeed(CLOCK_SPEED_400KHZ); test shit
 	Wire.begin(); // Initialize I2C
 
 	byte c = readRegister(WHO_AM_I);  // Read WHO_AM_I register
