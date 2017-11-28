@@ -95,8 +95,16 @@ void loop()
 #include "SparkFunMMA8452Q.h"
 #include "HttpClient.h"
 #include <cstdio>
+#include <cstring>
+#include "ArduinoJson.h"
+#include "MQTT.h"
+
+const int sampleSize = 100;
 // Create an MMA8452Q object, used throughout the rest of the sketch.
 MMA8452Q accel; // Default constructor, SA0 pin is HIGH
+
+char MQTT_domain[] = "backend.abelonditi.com";
+byte MQTT_server[] = {34,241,123,175};
 
 // The above works if the MMA8452Q's address select pin (SA0) is high.
 // If SA0 is low (if the jumper on the back of the SparkFun MMA8452Q breakout
@@ -117,14 +125,42 @@ void printResponse(http_response_t &response) {
   Serial.println(response.body);
 }
 
-void postAccelerometer(float x, float y, float z) {
-  char buffer[100];
-  sprintf(buffer,"{\"gyro_x\":%f,\"gyro_y\":%f,\"gyro_z\":%f}\r\n",x,y,z);
+
+
+
+
+//StaticJsonBuffer<20000> jsonBuffer;
+void postAccelerometer(float *x_array, float *y_array, float *z_array, int *time) {
+  DynamicJsonBuffer jsonBuffer;
+  char buffer[5000];
+  //sprintf(buffer, "{\"data\":[{\"timestamp\":%d,\"accel_x\":%f,\"accel_y\":%f,\"accel_z\":%f},{\"timestamp\":%d,\"accel_x\":%f,\"accel_y\":%f,\"accel_z\":%f}]}\r\n",12345, 0.22,0.33,0.44,123,0.11,0.41,0.14);
+
+  JsonObject& root = jsonBuffer.createObject();
+  JsonArray& data = root.createNestedArray("data");
+
+  for(int i = 0; i < sampleSize; i++){
+    JsonObject& object = data.createNestedObject();
+    object["timestamp"] = time[i];
+    object["accel_x"] = x_array[i];
+    object["accel_y"] = y_array[i];
+    object["accel_z"] = z_array[i];
+  }
+
+  root.printTo((char*)buffer, root.measureLength() + 1);
+
+  //Serial.println(buffer);
   request.path = "/sensors";
   request.body = buffer;
   http.post(request, response, headers);
-  printResponse(response);
+  //printResponse(response);
 }
+
+
+
+
+
+
+
 
 void setup()
 {
@@ -136,28 +172,46 @@ void setup()
 	// begin can take two parameters: full-scale range, and output data rate (ODR).
 	// Full-scale range can be: SCALE_2G, SCALE_4G, or SCALE_8G (2, 4, or 8g)
 	// ODR can be: ODR_800, ODR_400, ODR_200, ODR_100, ODR_50, ODR_12, ODR_6 or ODR_1
-    accel.begin(SCALE_2G, ODR_1); // Set up accel with +/-2g range, and slowest (1Hz) ODR
+    accel.begin(SCALE_2G, ODR_100); // Set up accel with +/-2g range, and slowest (1Hz) ODR
 }
+
+float x_values[sampleSize];
+float y_values[sampleSize];
+float z_values[sampleSize];
+int timestamp[sampleSize];
+
 
 void loop()
 {
 	// accel.available() will return 1 if new data is available, 0 otherwise
+    static int sampleCount = 0;
     if (accel.available())
     {
+
 		// To update acceleration values from the accelerometer, call accel.read();
         accel.read();
+            //timestamp = Time.millis();
 
-		// After reading, six class variables are updated: x, y, z, cx, cy, and cz.
-		// Those are the raw, 12-bit values (x, y, and z) and the calculated
-		// acceleration's in units of g (cx, cy, and cz).
+        x_values[sampleCount] = accel.cx;
+        y_values[sampleCount] = accel.cy;
+        z_values[sampleCount] = accel.cz;
+        timestamp[sampleCount] = millis();
 
-		// use the printAccelGraph funciton to print the values along with a bar
-		// graph, to see their relation to eachother:
-        printAccelGraph(accel.cx, "X", 20, 2.0);
+        /*printAccelGraph(accel.cx, "X", 20, 2.0);  //Print stuff
         printAccelGraph(accel.cy, "Y", 20, 2.0);
-        printAccelGraph(accel.cz, "Z", 20, 2.0);
-        Serial.println();
-        postAccelerometer(accel.cx, accel.cy, accel.cz);
+        printAccelGraph(accel.cz, "Z", 20, 2.0);*/
+        //Serial.println("deem\r\n");
+
+        ++sampleCount;
+        if (sampleCount >= sampleSize){
+            postAccelerometer(x_values, y_values, z_values, timestamp);
+            sampleCount = 0;
+            memset(x_values, 0, sizeof(x_values));
+            memset(y_values, 0, sizeof(y_values));
+            memset(z_values, 0, sizeof(z_values));
+            memset(timestamp, 0, sizeof(timestamp));
+        }
+
     }
 
 	// No need to delay, since our ODR is set to 1Hz, accel.available() will only return 1
