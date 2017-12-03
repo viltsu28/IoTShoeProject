@@ -155,7 +155,16 @@ void postAccelerometer(float *x_array, float *y_array, float *z_array, int *time
   //printResponse(response);
 }
 
+/*
 
+{ timeatamp: 123,
+  x:3,
+  y:4,
+  z:4
+}
+
+
+*/
 
 
 
